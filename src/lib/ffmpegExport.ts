@@ -5,8 +5,10 @@ import type { AudioTrack, FilterSettings, TextLayer } from '../types'
 
 // Self-hosted (copied from node_modules by scripts/copy-ffmpeg-core.mjs at install time)
 // so the editor doesn't depend on a third-party CDN being reachable at runtime.
-const CORE_BASE_URL = '/ffmpeg-core'
-const FONT_URL = '/fonts/Inter-Variable.ttf'
+// Resolved against BASE_URL so this also works when the app is served from a
+// sub-path (e.g. a GitHub Pages project site at /<repo>/).
+const CORE_BASE_URL = `${import.meta.env.BASE_URL}ffmpeg-core`
+const FONT_URL = `${import.meta.env.BASE_URL}fonts/Inter-Variable.ttf`
 const FONT_FILE = 'font.ttf'
 
 let ffmpegSingleton: FFmpeg | null = null
