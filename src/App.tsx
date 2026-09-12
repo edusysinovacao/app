@@ -1,5 +1,6 @@
 import { AudioPanel } from './components/AudioPanel'
 import { CropPanel } from './components/CropPanel'
+import { CutsPanel } from './components/CutsPanel'
 import { ExportBar } from './components/ExportBar'
 import { FilterPanel } from './components/FilterPanel'
 import { MediaUpload } from './components/MediaUpload'
@@ -46,6 +47,7 @@ function App() {
           <div className="flex w-full shrink-0 flex-col border-t border-zinc-800 md:h-full md:w-80 md:border-l md:border-t-0">
             <div className="flex-1 overflow-y-auto p-4">
               {activeTab === 'crop' && <CropPanel />}
+              {activeTab === 'cuts' && <CutsPanel />}
               {activeTab === 'text' && <TextPanel />}
               {activeTab === 'audio' && <AudioPanel />}
               {activeTab === 'filters' && <FilterPanel />}

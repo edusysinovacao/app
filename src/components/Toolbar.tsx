@@ -3,6 +3,7 @@ import { useEditorStore } from '../store/editorStore'
 
 const TABS: { id: ToolTab; label: string; icon: string }[] = [
   { id: 'crop', label: 'Enquadrar', icon: '⬛' },
+  { id: 'cuts', label: 'Cortes', icon: '✂️' },
   { id: 'text', label: 'Texto', icon: '🅣' },
   { id: 'audio', label: 'Áudio', icon: '🎵' },
   { id: 'filters', label: 'Filtros', icon: '✨' },

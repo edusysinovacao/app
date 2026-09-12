@@ -1,8 +1,9 @@
 import type React from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { REEL_HEIGHT, REEL_WIDTH } from '../types'
 import type { TextLayer } from '../types'
 import { clamp, formatTime } from '../lib/mediaUtils'
+import { computeKeepSegments, locate, sourceTimeFromEffective, totalDuration } from '../lib/segments'
 import { useEditorStore } from '../store/editorStore'
 
 interface Size {
@@ -29,6 +30,7 @@ export function PreviewStage() {
   const audio = useEditorStore((s) => s.audio)
   const muteOriginal = useEditorStore((s) => s.muteOriginal)
   const originalVolume = useEditorStore((s) => s.originalVolume)
+  const cuts = useEditorStore((s) => s.cuts)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -36,7 +38,15 @@ export function PreviewStage() {
   const [containerSize, setContainerSize] = useState<Size>({ w: 0, h: 0 })
   const [natural, setNatural] = useState<Size>({ w: 0, h: 0 })
 
-  const duration = Math.max(0, trimEnd - trimStart)
+  // The "effective" timeline is the trim range with any detected silences/breaths
+  // skipped — preview playback and text-layer timing both work in this space.
+  const keepSegments = useMemo(() => computeKeepSegments(trimStart, trimEnd, cuts), [trimStart, trimEnd, cuts])
+  const duration = useMemo(() => totalDuration(keepSegments), [keepSegments])
+
+  // If a fresh cut shrinks the timeline past where we're currently parked, snap back to 0.
+  useEffect(() => {
+    if (useEditorStore.getState().currentTime > duration) setCurrentTime(0)
+  }, [duration, setCurrentTime])
 
   // Track container size responsively.
   useEffect(() => {
@@ -53,15 +63,15 @@ export function PreviewStage() {
     return () => ro.disconnect()
   }, [])
 
-  // Keep the video's actual playback time in sync with the trimmed timeline.
+  // Keep the video's actual playback time in sync with the effective (cuts-applied) timeline.
   useEffect(() => {
     const video = videoRef.current
-    if (!video) return
-    const target = trimStart + currentTime
+    if (!video || keepSegments.length === 0) return
+    const target = sourceTimeFromEffective(currentTime, keepSegments)
     if (Math.abs(video.currentTime - target) > 0.08) {
       video.currentTime = target
     }
-  }, [currentTime, trimStart, videoUrl])
+  }, [currentTime, keepSegments, videoUrl])
 
   // Sync background audio position with the relative timeline.
   useEffect(() => {
@@ -87,25 +97,31 @@ export function PreviewStage() {
     }
   }, [isPlaying])
 
-  // Drive the relative currentTime from the video's native timeupdate, looping at trimEnd.
+  // Drive the effective currentTime from the video's native timeupdate, skipping over any
+  // cut (silence/breath) segments transparently and looping at the end of the timeline.
   useEffect(() => {
     const video = videoRef.current
-    if (!video) return
+    if (!video || keepSegments.length === 0) return
     function onTimeUpdate() {
       if (!video) return
-      const rel = video.currentTime - trimStart
-      if (rel >= duration) {
-        video.currentTime = trimStart
+      const last = keepSegments[keepSegments.length - 1]
+      if (video.currentTime >= last.end - 0.005) {
+        video.currentTime = keepSegments[0].start
         if (bgAudioRef.current && audio) bgAudioRef.current.currentTime = audio.offset
         setCurrentTime(0)
-      } else {
-        setCurrentTime(Math.max(0, rel))
+        return
       }
+      const loc = locate(video.currentTime, keepSegments)
+      if (loc.inGap) {
+        // Drifted into a cut — jump straight to the next kept segment.
+        video.currentTime = keepSegments[loc.segmentIndex].start
+      }
+      setCurrentTime(Math.max(0, loc.effectiveTime))
     }
     video.addEventListener('timeupdate', onTimeUpdate)
     return () => video.removeEventListener('timeupdate', onTimeUpdate)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trimStart, duration, audio])
+  }, [keepSegments, audio])
 
   useEffect(() => {
     const video = videoRef.current
@@ -197,7 +213,7 @@ export function PreviewStage() {
           onLoadedMetadata={(e) => {
             const v = e.currentTarget
             setNatural({ w: v.videoWidth, h: v.videoHeight })
-            v.currentTime = trimStart
+            v.currentTime = keepSegments[0]?.start ?? trimStart
           }}
         />
         {activeTab === 'crop' && (

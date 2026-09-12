@@ -5,6 +5,7 @@ export function ExportBar() {
   const videoFile = useEditorStore((s) => s.videoFile)
   const trimStart = useEditorStore((s) => s.trimStart)
   const trimEnd = useEditorStore((s) => s.trimEnd)
+  const cuts = useEditorStore((s) => s.cuts)
   const crop = useEditorStore((s) => s.crop)
   const filter = useEditorStore((s) => s.filter)
   const textLayers = useEditorStore((s) => s.textLayers)
@@ -34,6 +35,7 @@ export function ExportBar() {
         videoFile,
         trimStart,
         trimEnd,
+        cuts,
         crop,
         filter,
         textLayers,

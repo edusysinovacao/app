@@ -1,7 +1,8 @@
 import { create } from 'zustand'
-import type { AudioTrack, CropSettings, FilterSettings, TextLayer } from '../types'
+import { computeKeepSegments, totalDuration } from '../lib/segments'
+import type { AudioTrack, CropSettings, FilterSettings, SilenceCandidate, TextLayer, TimeRange } from '../types'
 
-export type ToolTab = 'media' | 'crop' | 'text' | 'audio' | 'filters'
+export type ToolTab = 'media' | 'crop' | 'cuts' | 'text' | 'audio' | 'filters'
 
 interface EditorState {
   videoFile: File | null
@@ -21,6 +22,17 @@ interface EditorState {
   muteOriginal: boolean
   originalVolume: number
 
+  // Silence/breath cuts: `silenceCandidates` is the reviewable list from the last
+  // detection run, `cuts` (derived from the enabled ones) is what preview/export use.
+  silenceCandidates: SilenceCandidate[]
+  cuts: TimeRange[]
+  isDetectingSilences: boolean
+  silenceError: string | null
+
+  isTranscribing: boolean
+  transcribeStatus: string | null
+  transcribeError: string | null
+
   currentTime: number
   isPlaying: boolean
 
@@ -39,6 +51,7 @@ interface EditorState {
   applyFilterPreset: (preset: FilterSettings) => void
 
   addTextLayer: () => void
+  addTextLayers: (layers: TextLayer[]) => void
   updateTextLayer: (id: string, patch: Partial<TextLayer>) => void
   removeTextLayer: (id: string) => void
   selectText: (id: string | null) => void
@@ -48,6 +61,16 @@ interface EditorState {
   setAudioOffset: (offset: number) => void
   setMuteOriginal: (mute: boolean) => void
   setOriginalVolume: (volume: number) => void
+
+  setSilenceCandidates: (candidates: SilenceCandidate[]) => void
+  toggleSilenceCandidate: (id: string) => void
+  clearSilences: () => void
+  setDetectingSilences: (v: boolean) => void
+  setSilenceError: (v: string | null) => void
+
+  setTranscribing: (v: boolean) => void
+  setTranscribeStatus: (v: string | null) => void
+  setTranscribeError: (v: string | null) => void
 
   setCurrentTime: (t: number) => void
   setIsPlaying: (p: boolean) => void
@@ -76,6 +99,10 @@ export function nextId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${idCounter}`
 }
 
+function cutsFromCandidates(candidates: SilenceCandidate[]): TimeRange[] {
+  return candidates.filter((c) => c.enabled).map(({ start, end }) => ({ start, end }))
+}
+
 export const useEditorStore = create<EditorState>((set, get) => ({
   videoFile: null,
   videoUrl: null,
@@ -93,6 +120,15 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   audio: null,
   muteOriginal: false,
   originalVolume: 1,
+
+  silenceCandidates: [],
+  cuts: [],
+  isDetectingSilences: false,
+  silenceError: null,
+
+  isTranscribing: false,
+  transcribeStatus: null,
+  transcribeError: null,
 
   currentTime: 0,
   isPlaying: false,
@@ -116,6 +152,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       filter: defaultFilter,
       textLayers: [],
       selectedTextId: null,
+      silenceCandidates: [],
+      cuts: [],
+      silenceError: null,
+      transcribeError: null,
       exportedUrl: null,
       exportError: null,
       activeTab: 'crop',
@@ -134,14 +174,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   applyFilterPreset: (preset) => set({ filter: preset }),
 
   addTextLayer: () => {
-    const { trimStart, trimEnd, textLayers } = get()
-    const duration = Math.max(0.1, trimEnd - trimStart)
+    const { trimStart, trimEnd, cuts, textLayers } = get()
+    const duration = Math.max(0.1, totalDuration(computeKeepSegments(trimStart, trimEnd, cuts)))
     const layer: TextLayer = {
       id: nextId('text'),
       text: 'Seu texto aqui',
       x: 50,
       y: 50,
-      fontSize: 48,
+      fontSize: 72,
       color: '#ffffff',
       backgroundColor: 'transparent',
       bold: true,
@@ -151,6 +191,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
     set({ textLayers: [...textLayers, layer], selectedTextId: layer.id, activeTab: 'text' })
   },
+
+  addTextLayers: (layers) => set((s) => ({ textLayers: [...s.textLayers, ...layers] })),
 
   updateTextLayer: (id, patch) =>
     set((s) => ({
@@ -172,6 +214,20 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set((s) => (s.audio ? { audio: { ...s.audio, offset } } : {})),
   setMuteOriginal: (mute) => set({ muteOriginal: mute }),
   setOriginalVolume: (volume) => set({ originalVolume: volume }),
+
+  setSilenceCandidates: (candidates) => set({ silenceCandidates: candidates, cuts: cutsFromCandidates(candidates) }),
+  toggleSilenceCandidate: (id) =>
+    set((s) => {
+      const silenceCandidates = s.silenceCandidates.map((c) => (c.id === id ? { ...c, enabled: !c.enabled } : c))
+      return { silenceCandidates, cuts: cutsFromCandidates(silenceCandidates) }
+    }),
+  clearSilences: () => set({ silenceCandidates: [], cuts: [] }),
+  setDetectingSilences: (v) => set({ isDetectingSilences: v }),
+  setSilenceError: (v) => set({ silenceError: v }),
+
+  setTranscribing: (v) => set({ isTranscribing: v }),
+  setTranscribeStatus: (v) => set({ transcribeStatus: v }),
+  setTranscribeError: (v) => set({ transcribeError: v }),
 
   setCurrentTime: (t) => set({ currentTime: t }),
   setIsPlaying: (p) => set({ isPlaying: p }),
@@ -196,6 +252,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       audio: null,
       muteOriginal: false,
       originalVolume: 1,
+      silenceCandidates: [],
+      cuts: [],
+      isDetectingSilences: false,
+      silenceError: null,
+      isTranscribing: false,
+      transcribeStatus: null,
+      transcribeError: null,
       currentTime: 0,
       isPlaying: false,
       activeTab: 'media',

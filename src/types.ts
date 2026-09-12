@@ -10,10 +10,22 @@ export interface TextLayer {
   backgroundColor: string
   bold: boolean
   align: 'left' | 'center' | 'right'
-  /** Seconds from the start of the trimmed clip when the text appears. */
+  /** Seconds from the start of the final (trimmed + cuts applied) timeline when the text appears. */
   start: number
-  /** Seconds from the start of the trimmed clip when the text disappears. */
+  /** Seconds from the start of the final (trimmed + cuts applied) timeline when the text disappears. */
   end: number
+}
+
+/** A time span in the ORIGINAL video's own timeline (seconds), start inclusive, end exclusive. */
+export interface TimeRange {
+  start: number
+  end: number
+}
+
+/** A detected silence/breath, kept around so the user can review and toggle it before it's cut. */
+export interface SilenceCandidate extends TimeRange {
+  id: string
+  enabled: boolean
 }
 
 export interface FilterSettings {

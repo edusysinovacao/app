@@ -16,6 +16,13 @@ navegador — nada é enviado para um servidor.
   sonora de fundo, com controle de volume e do trecho usado do arquivo.
 - **Filtros**: brilho, contraste, saturação, preto-e-branco, sépia e presets
   rápidos (Vívido, P&B, Sépia, Contraste+, Suave).
+- **Cortes automáticos**: detecta silêncios e respirações no áudio (ajustável
+  por sensibilidade e duração mínima) e permite revisar/desmarcar cada trecho
+  antes de removê-lo do vídeo final — sem precisar cortar manualmente.
+- **Legendas automáticas**: transcreve a fala do vídeo (reconhecimento de voz
+  rodando no navegador, via [Whisper](https://github.com/openai/whisper)/
+  [transformers.js](https://huggingface.co/docs/transformers.js)) e cria uma
+  camada de texto para cada trecho falado, já alinhada com os cortes aplicados.
 - **Exportação** para MP4 1080×1920 (H.264/AAC) direto no navegador via
   [ffmpeg.wasm](https://ffmpegwasm.netlify.app/), com barra de progresso e
   download do resultado.
@@ -50,6 +57,29 @@ de fundo é mixada com o som original (quando não estiver mudo) via `amix`.
 
 Uma fonte [Inter](https://rsms.me/inter/) (licença OFL, incluída em
 `public/fonts`) é usada para desenhar o texto durante a exportação.
+
+### Cortes de silêncio/respiração e legendas automáticas
+
+A detecção de silêncios usa o filtro `silencedetect` do próprio ffmpeg sobre o
+áudio original. Cada trecho detectado vira um "corte" opcional; a linha do
+tempo "final" (o que realmente é reproduzido e exportado) é a junção dos
+trechos mantidos, calculada em `src/lib/segments.ts` e usada tanto na prévia
+(pulando os cortes durante a reprodução) quanto na exportação (via `concat`
+do ffmpeg) — as duas sempre concordam porque usam exatamente a mesma lógica.
+
+As legendas automáticas extraem o áudio já cortado/trimado (mesma lógica de
+`concat`) como PCM 16kHz mono e o passam para um modelo Whisper rodando
+inteiramente no navegador via `@huggingface/transformers` (WebAssembly, sem
+depender de GPU). O modelo (alguns MB) é baixado sob demanda — só quando essa
+função é usada — e fica em cache no navegador para os usos seguintes.
+
+## Limitações conhecidas
+
+- A exportação e a análise de áudio rodam via WebAssembly no navegador do
+  usuário (single-thread), então vídeos longos ou aparelhos mais fracos podem
+  demorar mais.
+- A transcrição automática usa um modelo pequeno (Whisper tiny) para caber no
+  navegador; revise o texto gerado antes de publicar.
 
 ## Estrutura do código
 
