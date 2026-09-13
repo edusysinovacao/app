@@ -27,7 +27,10 @@ export async function getAsrPipeline(
   if (!asrPipelinePromise) {
     asrPipelinePromise = pipeline('automatic-speech-recognition', MODEL_ID, {
       device: 'wasm',
-      dtype: 'q8',
+      // Unquantized weights: some of this model's quantized (q8/q4) ONNX exports hit a
+      // known onnxruntime-web bug ("Missing required scale... MatMulNBits") on the
+      // decoder's embedding layer. fp32 is larger to download but always well-formed.
+      dtype: 'fp32',
       progress_callback: onProgress as (p: unknown) => void,
     }) as Promise<AutomaticSpeechRecognitionPipeline>
   }

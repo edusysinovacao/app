@@ -114,7 +114,8 @@ export function TextPanel() {
         {transcribeError && <p className="text-xs text-red-400">{transcribeError}</p>}
         {isTranscribing && (
           <p className="text-[11px] text-zinc-500">
-            A primeira vez baixa um modelo de reconhecimento de fala (alguns MB) — as próximas são mais rápidas.
+            A primeira vez baixa um modelo de reconhecimento de fala (~150MB) — as próximas são mais rápidas, pois
+            fica salvo no navegador.
           </p>
         )}
       </div>
