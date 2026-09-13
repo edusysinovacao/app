@@ -40,12 +40,43 @@ export function CutsPanel() {
 
   const enabledCount = silenceCandidates.filter((c) => c.enabled).length
   const totalCutSeconds = silenceCandidates.filter((c) => c.enabled).reduce((sum, c) => sum + (c.end - c.start), 0)
+  const autoRemoveOn = silenceCandidates.length > 0
+
+  async function handleToggleAuto(on: boolean) {
+    if (on) {
+      await handleDetect()
+    } else {
+      clearSilences()
+      setError(null)
+    }
+  }
 
   return (
     <PanelSection
       title="Cortar silêncios e respirações"
       description="Detecta automaticamente pausas e respirações no áudio para remover do vídeo final. Revise a lista antes de exportar — você pode desmarcar qualquer trecho."
     >
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 p-3">
+        <div>
+          <p className="text-sm font-medium text-zinc-200">Remover respirações automaticamente</p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            {isDetecting ? 'Analisando áudio…' : 'Um clique detecta e já ajusta o vídeo, cortando as pausas encontradas.'}
+          </p>
+        </div>
+        <label className="relative inline-flex shrink-0 cursor-pointer items-center">
+          <input
+            type="checkbox"
+            className="peer sr-only"
+            checked={autoRemoveOn}
+            disabled={isDetecting}
+            onChange={(e) => handleToggleAuto(e.target.checked)}
+          />
+          <div className="h-5 w-9 rounded-full bg-zinc-700 peer-checked:bg-fuchsia-600" />
+          <div className="absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform peer-checked:translate-x-4" />
+        </label>
+      </div>
+
+      <p className="text-xs font-medium text-zinc-400">Ajuste fino (opcional)</p>
       <SliderRow
         label="Sensibilidade"
         value={sensitivity}
@@ -68,9 +99,9 @@ export function CutsPanel() {
       <button
         onClick={handleDetect}
         disabled={isDetecting}
-        className="w-full rounded-lg bg-gradient-to-r from-fuchsia-500 to-purple-600 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+        className="w-full rounded-lg border border-fuchsia-500 py-2 text-sm font-medium text-fuchsia-300 hover:bg-fuchsia-500/10 disabled:opacity-50"
       >
-        {isDetecting ? 'Analisando áudio…' : '✂️ Detectar silêncios e respirações'}
+        {isDetecting ? 'Analisando áudio…' : autoRemoveOn ? '🔄 Detectar novamente com esses ajustes' : '✂️ Detectar silêncios e respirações'}
       </button>
 
       {error && <p className="text-xs text-red-400">{error}</p>}
